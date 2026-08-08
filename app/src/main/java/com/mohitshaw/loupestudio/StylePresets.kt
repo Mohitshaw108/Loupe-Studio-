@@ -1,4 +1,4 @@
-package com.loupestudio.editor
+package com.mohitshaw.loupestudio
 
 /** One entry in the "Browse Styles" grid. `base` is applied at 100% intensity. */
 data class StylePreset(val name: String, val category: String, val base: Adjustments)
