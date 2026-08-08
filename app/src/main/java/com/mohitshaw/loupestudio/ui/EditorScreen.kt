@@ -34,23 +34,16 @@ fun EditorScreen(
     // Held across recompositions so the GL surface + renderer survive tab/slider churn.
     var glView by remember { mutableStateOf<PhotoGLSurfaceView?>(null) }
 
-    LaunchedEffect(bitmap) { bitmap?.let { glView?.setBitmap(it) } }
-    LaunchedEffect(adjustments) { glView?.setAdjustments(adjustments) }
-
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(
-                factory = { ctx -> PhotoGLSurfaceView(ctx).also { glView = it; bitmap?.let(it::setBitmap) } },
+                factory = { ctx -> PhotoGLSurfaceView(ctx).also { glView = it } },
+                update = { view ->
+                    bitmap?.let { view.setBitmap(it) }
+                    view.setAdjustments(adjustments)
+                },
                 modifier = Modifier.fillMaxSize()
             )
-            TopBar(
-                onPickImage = onPickImage,
-                onUndo = viewModel::undo,
-                onRedo = viewModel::redo,
-                onExport = { glView?.exportBitmap { bmp -> bmp?.let(onExport) } },
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
-        }
 
         TabRow(selectedTabIndex = tab.ordinal) {
             EditorTab.values().forEach { t ->
