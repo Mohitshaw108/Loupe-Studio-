@@ -57,7 +57,7 @@ class MainActivity : ComponentActivity() {
         var out: OutputStream? = null
         try {
             out = resolver.openOutputStream(uri)
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out!!)
         } finally {
             out?.close()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
