@@ -1,4 +1,4 @@
-package com.loupestudio.editor.gl
+package com.mohitshaw.loupestudio.gl
 
 /**
  * Every shader here is a direct port of the per-pixel math in the web
