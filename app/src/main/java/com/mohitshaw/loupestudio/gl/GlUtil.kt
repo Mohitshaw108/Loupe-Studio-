@@ -1,4 +1,4 @@
-package com.loupestudio.editor.gl
+package com.mohitshaw.loupestudio.gl
 
 import android.opengl.GLES20
 
