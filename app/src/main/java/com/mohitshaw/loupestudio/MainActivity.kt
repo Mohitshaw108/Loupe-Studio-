@@ -20,7 +20,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
+    try {
+        val file = java.io.File(getExternalFilesDir(null), "crash_log.txt")
+        file.writeText(throwable.stackTraceToString())
+    } catch (e: Exception) { }
+    android.os.Process.killProcess(android.os.Process.myPid())
+}
         val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri ?: return@registerForActivityResult
             contentResolver.openInputStream(uri)?.use { stream ->
