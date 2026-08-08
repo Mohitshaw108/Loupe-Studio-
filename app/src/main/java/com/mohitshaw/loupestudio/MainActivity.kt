@@ -32,11 +32,22 @@ class MainActivity : ComponentActivity() {
         }
 
         val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-            uri ?: return@registerForActivityResult
-            contentResolver.openInputStream(uri)?.use { stream ->
-                val bmp = BitmapFactory.decodeStream(stream)
-                if (bmp != null) vm.loadImage(bmp)
+            if (uri == null) {
+                Toast.makeText(this, "No image selected", Toast.LENGTH_SHORT).show()
+                return@registerForActivityResult
             }
+            val stream = contentResolver.openInputStream(uri)
+            if (stream == null) {
+                Toast.makeText(this, "Could not open image stream", Toast.LENGTH_LONG).show()
+                return@registerForActivityResult
+            }
+            val bmp = stream.use { BitmapFactory.decodeStream(it) }
+            if (bmp == null) {
+                Toast.makeText(this, "Decode failed - unsupported format?", Toast.LENGTH_LONG).show()
+                return@registerForActivityResult
+            }
+            Toast.makeText(this, "Loaded ${bmp.width}x${bmp.height}, sending to editor", Toast.LENGTH_LONG).show()
+            vm.loadImage(bmp)
         }
 
         setContent {
