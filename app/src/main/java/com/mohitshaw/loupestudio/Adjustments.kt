@@ -1,4 +1,4 @@
-com.mohitshaw.loupestudio):
+package com.mohitshaw.loupestudio
 
 import androidx.compose.ui.graphics.Color
 
