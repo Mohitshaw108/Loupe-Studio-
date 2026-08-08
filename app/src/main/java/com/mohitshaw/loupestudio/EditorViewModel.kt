@@ -1,4 +1,4 @@
-package com.loupestudio.editor
+package com.mohitshaw.loupestudio
 
 import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
