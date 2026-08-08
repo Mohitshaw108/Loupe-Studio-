@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LoupeApp() {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
