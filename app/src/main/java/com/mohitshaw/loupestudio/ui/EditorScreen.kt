@@ -1,4 +1,4 @@
-package com.loupestudio.editor.ui
+package com.mohitshaw.loupestudio.ui
 
 import android.graphics.Bitmap
 import androidx.compose.ui.viewinterop.AndroidView
@@ -14,12 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.loupestudio.editor.Adjustments
-import com.loupestudio.editor.EditorTab
-import com.loupestudio.editor.EditorViewModel
-import com.loupestudio.editor.StylePreset
-import com.loupestudio.editor.StylePresets
-import com.loupestudio.editor.gl.PhotoGLSurfaceView
+import com.mohitshaw.loupestudio.Adjustments
+import com.mohitshaw.loupestudio.EditorTab
+import com.mohitshaw.loupestudio.EditorViewModel
+import com.mohitshaw.loupestudio.StylePreset
+import com.mohitshaw.loupestudio.StylePresets
+import com.mohitshaw.loupestudio.gl.PhotoGLSurfaceView
 
 @Composable
 fun EditorScreen(
