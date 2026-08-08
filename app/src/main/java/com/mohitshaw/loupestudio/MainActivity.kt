@@ -50,14 +50,7 @@ class MainActivity : ComponentActivity() {
             vm.loadImage(bmp)
         }
 
-        setContent {
-            EditorScreen(
-                viewModel = vm,
-                onPickImage = { pickImage.launch("image/*") },
-                onExport = { bmp -> saveToGallery(bmp) }
-            )
-        }
-    }
+        onExport = { bmp -> runOnUiThread { saveToGallery(bmp) } }
 
     private fun saveToGallery(bitmap: Bitmap) {
         val name = "loupe_${System.currentTimeMillis()}.jpg"
