@@ -19,9 +19,11 @@ class PhotoGLSurfaceView @JvmOverloads constructor(
         // request) — not a fixed 60fps loop. Cheap on battery, still feels live because
         // every adjustment call is followed by requestRender().
         renderMode = RENDERMODE_WHEN_DIRTY
-    }
+    private var lastBitmap: Bitmap? = null
 
     fun setBitmap(bmp: Bitmap) {
+        if (bmp === lastBitmap) return
+        lastBitmap = bmp
         renderer.loadBitmap(bmp)
         requestRender()
     }
