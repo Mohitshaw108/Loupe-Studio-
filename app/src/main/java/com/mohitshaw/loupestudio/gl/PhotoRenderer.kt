@@ -1,15 +1,13 @@
-package com.loupestudio.editor.gl
+package com.mohitshaw.loupestudio.gl
 
 import android.graphics.Bitmap
 import android.opengl.GLES20
 import android.opengl.GLSurfaceView
 import android.opengl.GLUtils
-import com.loupestudio.editor.Adjustments
+import com.mohitshaw.loupestudio.Adjustments
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
-import javax.microedition.khronos.egl.EGLConfig
-import javax.microedition.khronos.opengles.GL10
 
 /**
  * Renders one photo through the tone/color + sharpen pipeline entirely on
