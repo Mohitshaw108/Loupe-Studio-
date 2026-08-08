@@ -1,10 +1,10 @@
-package com.loupestudio.editor.gl
+package com.mohitshaw.loupestudio.gl
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.opengl.GLSurfaceView
 import android.util.AttributeSet
-import com.loupestudio.editor.Adjustments
+import com.mohitshaw.loupestudio.Adjustments
 
 class PhotoGLSurfaceView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
