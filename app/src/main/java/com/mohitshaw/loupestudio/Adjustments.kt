@@ -1,4 +1,4 @@
-package com.loupestudio.editor
+com.mohitshaw.loupestudio.gl
 
 import androidx.compose.ui.graphics.Color
 
