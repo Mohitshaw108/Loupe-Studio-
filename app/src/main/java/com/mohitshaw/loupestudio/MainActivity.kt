@@ -1,4 +1,4 @@
-package com.loupestudio.editor
+package com.mohitshaw.loupestudio
 
 import android.content.ContentValues
 import android.graphics.Bitmap
@@ -11,7 +11,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import com.loupestudio.editor.ui.EditorScreen
+import com.mohitshaw.loupestudio.ui.EditorScreen
 import java.io.OutputStream
 
 class MainActivity : ComponentActivity() {
@@ -20,13 +20,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
-    try {
-        val file = java.io.File(getExternalFilesDir(null), "crash_log.txt")
-        file.writeText(throwable.stackTraceToString())
-    } catch (e: Exception) { }
-    android.os.Process.killProcess(android.os.Process.myPid())
-}
+
+        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
+            runOnUiThread {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Crash")
+                    .setMessage(throwable.stackTraceToString())
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+        }
+
         val pickImage = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             uri ?: return@registerForActivityResult
             contentResolver.openInputStream(uri)?.use { stream ->
