@@ -52,7 +52,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
             sourceBitmap = sample,
             previewBitmap = sample,
             resolutionLabel = "${sample.width} × ${sample.height} px",
-            statusMessage = "Sample loaded • Pick a photo or tap AI Enhance 2x"
+            statusMessage = "Sample loaded • Pick a photo or tap AI Upscale 4x"
         )
     }
 
@@ -144,14 +144,16 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
                     sourceBitmap = enhanced,
                     isAiRunning = false,
                     aiProgress = 1f,
-                    resolutionLabel = "${enhanced.width} × ${enhanced.height} px (AI 2x)",
+                    resolutionLabel = "${enhanced.width} × ${enhanced.height} px (AI 4x)",
                     statusMessage = "AI Super-Resolution Complete (${enhanced.width}×${enhanced.height})"
                 )
                 triggerRender()
-            } catch (e: Exception) {
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 _uiState.value = _uiState.value.copy(
                     isAiRunning = false,
-                    statusMessage = "AI Enhance error: ${e.localizedMessage}"
+                    statusMessage = "AI Enhance error: ${e.localizedMessage ?: e.javaClass.simpleName}"
                 )
             }
         }
@@ -225,7 +227,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
     /**
      * Generates a rich, detailed test artwork on startup so the user can test
-     * the AGSL shaders, Loupe magnifier, and AI 2x upscaler right away.
+     * the AGSL shaders, Loupe magnifier, and AI 4x upscaler right away.
      */
     private fun createSampleStudioBitmap(width: Int, height: Int): Bitmap {
         val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -288,7 +290,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         canvas.drawText("LOUPE STUDIO • AGSL + AI", sunX, height * 0.86f, paint)
         paint.textSize = 20f
         paint.color = Color.rgb(210, 220, 240)
-        canvas.drawText("Drag with Loupe ON or tap AI Enhance 2x", sunX, height * 0.91f, paint)
+        canvas.drawText("Drag with Loupe ON or tap AI Upscale 4x", sunX, height * 0.91f, paint)
 
         return bmp
     }
