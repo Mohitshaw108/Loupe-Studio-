@@ -1,104 +1,295 @@
-package com.mohitshaw.loupestudio
+package com.mohit.loupestudio
 
+import android.app.Application
+import android.content.ContentValues
 import android.graphics.Bitmap
-import androidx.lifecycle.ViewModel
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Paint
+import android.graphics.RadialGradient
+import android.graphics.Shader
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-enum class EditorTab { ADJUST, COLOR, STYLES }
+data class EditorUiState(
+    val sourceBitmap: Bitmap? = null,
+    val previewBitmap: Bitmap? = null,
+    val adjustments: Adjustments = Adjustments(),
+    val activePreset: String = "Original",
+    val loupeEnabled: Boolean = false,
+    val loupeX: Float = 0.5f,
+    val loupeY: Float = 0.5f,
+    val showOriginal: Boolean = false,
+    val isAiRunning: Boolean = false,
+    val aiProgress: Float = 0f,
+    val statusMessage: String = "Ready",
+    val resolutionLabel: String = ""
+)
 
-class EditorViewModel : ViewModel() {
+class EditorViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val _bitmap = MutableStateFlow<Bitmap?>(null)
-    val bitmap: StateFlow<Bitmap?> = _bitmap.asStateFlow()
+    private val _uiState = MutableStateFlow(EditorUiState())
+    val uiState: StateFlow<EditorUiState> = _uiState.asStateFlow()
 
-    private val _adjustments = MutableStateFlow(Adjustments.NEUTRAL)
-    val adjustments: StateFlow<Adjustments> = _adjustments.asStateFlow()
+    private val aiEnhancer = AiEnhancer(application.applicationContext)
+    private var renderJob: Job? = null
 
-    private val _tab = MutableStateFlow(EditorTab.ADJUST)
-    val tab: StateFlow<EditorTab> = _tab.asStateFlow()
-
-    private val _styleIntensity = MutableStateFlow(1f) // 0.2..1.5, matches the web slider's 20%-150%
-    val styleIntensity: StateFlow<Float> = _styleIntensity.asStateFlow()
-
-    private val _activeCategory = MutableStateFlow("All")
-    val activeCategory: StateFlow<String> = _activeCategory.asStateFlow()
-
-    private val _promptMatchLabel = MutableStateFlow<String?>(null)
-    val promptMatchLabel: StateFlow<String?> = _promptMatchLabel.asStateFlow()
-
-    // Simple linear undo/redo over full Adjustments snapshots — mirrors the web
-    // build's pushHistory() but is dramatically simpler since we don't need to
-    // snapshot raster pixels: adjustments are non-destructive until export.
-    private val undoStack = ArrayDeque<Adjustments>()
-    private val redoStack = ArrayDeque<Adjustments>()
-
-    fun loadImage(bmp: Bitmap) {
-        _bitmap.value = bmp
-        _adjustments.value = Adjustments.NEUTRAL
-        undoStack.clear(); redoStack.clear()
+    init {
+        val sample = createSampleStudioBitmap(800, 1000)
+        _uiState.value = _uiState.value.copy(
+            sourceBitmap = sample,
+            previewBitmap = sample,
+            resolutionLabel = "${sample.width} × ${sample.height} px",
+            statusMessage = "Sample loaded • Pick a photo or tap AI Enhance 2x"
+        )
     }
 
-    fun selectTab(t: EditorTab) { _tab.value = t }
-
-    private fun pushUndo() {
-        undoStack.addLast(_adjustments.value)
-        if (undoStack.size > 30) undoStack.removeFirst()
-        redoStack.clear()
+    fun loadFromUri(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val context = getApplication<Application>().applicationContext
+                val source = ImageDecoder.createSource(context.contentResolver, uri)
+                val decoded = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                    decoder.isMutableRequired = true
+                    val maxDim = maxOf(info.size.width, info.size.height)
+                    if (maxDim > 1600) {
+                        val scale = 1600f / maxDim
+                        decoder.setTargetSize(
+                            (info.size.width * scale).toInt(),
+                            (info.size.height * scale).toInt()
+                        )
+                    }
+                }
+                _uiState.value = _uiState.value.copy(
+                    sourceBitmap = decoded,
+                    adjustments = Adjustments(),
+                    activePreset = "Original",
+                    resolutionLabel = "${decoded.width} × ${decoded.height} px",
+                    statusMessage = "Photo loaded"
+                )
+                triggerRender()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    statusMessage = "Failed to load image: ${e.localizedMessage}"
+                )
+            }
+        }
     }
 
-    fun undo() {
-        val prev = undoStack.removeLastOrNull() ?: return
-        redoStack.addLast(_adjustments.value)
-        _adjustments.value = prev
+    fun updateAdjustments(newAdjustments: Adjustments, presetName: String = "Custom") {
+        _uiState.value = _uiState.value.copy(
+            adjustments = newAdjustments,
+            activePreset = presetName
+        )
+        triggerRender()
     }
 
-    fun redo() {
-        val next = redoStack.removeLastOrNull() ?: return
-        undoStack.addLast(_adjustments.value)
-        _adjustments.value = next
+    fun applyPreset(preset: StylePreset) {
+        updateAdjustments(preset.adjustments, preset.name)
     }
 
-    /** Called continuously while a slider drags — cheap, no history push per-frame. */
-    fun updateLive(transform: (Adjustments) -> Adjustments) {
-        _adjustments.update(transform)
+    fun toggleLoupe() {
+        val next = !_uiState.value.loupeEnabled
+        _uiState.value = _uiState.value.copy(
+            loupeEnabled = next,
+            statusMessage = if (next) "Loupe Active: Drag finger on photo to inspect" else "Loupe Off"
+        )
+        triggerRender()
     }
 
-    /** Called once when a slider is released, so undo has one entry per gesture. */
-    fun commitGesture(beforeGesture: Adjustments) {
-        undoStack.addLast(beforeGesture)
-        if (undoStack.size > 30) undoStack.removeFirst()
-        redoStack.clear()
+    fun updateLoupePosition(normX: Float, normY: Float) {
+        if (!_uiState.value.loupeEnabled) return
+        _uiState.value = _uiState.value.copy(
+            loupeX = normX.coerceIn(0.05f, 0.95f),
+            loupeY = normY.coerceIn(0.05f, 0.95f)
+        )
+        triggerRender()
     }
 
-    fun resetAdjustments() {
-        pushUndo()
-        _adjustments.value = Adjustments.NEUTRAL
+    fun setShowOriginal(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showOriginal = show)
     }
 
-    fun selectCategory(cat: String) { _activeCategory.value = cat }
+    fun runAiEnhancer() {
+        val currentSource = _uiState.value.sourceBitmap ?: return
+        if (_uiState.value.isAiRunning) return
 
-    fun setStyleIntensity(v: Float) { _styleIntensity.value = v }
-
-    fun applyStyle(preset: StylePreset) {
-        pushUndo()
-        _adjustments.value = preset.base.scaledBy(_styleIntensity.value)
-        _promptMatchLabel.value = preset.name + " applied"
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isAiRunning = true,
+                aiProgress = 0.05f,
+                statusMessage = "Starting AI Super-Resolution..."
+            )
+            try {
+                val enhanced = aiEnhancer.enhanceImage(currentSource) { progress, msg ->
+                    _uiState.value = _uiState.value.copy(
+                        aiProgress = progress,
+                        statusMessage = msg
+                    )
+                }
+                _uiState.value = _uiState.value.copy(
+                    sourceBitmap = enhanced,
+                    isAiRunning = false,
+                    aiProgress = 1f,
+                    resolutionLabel = "${enhanced.width} × ${enhanced.height} px (AI 2x)",
+                    statusMessage = "AI Super-Resolution Complete (${enhanced.width}×${enhanced.height})"
+                )
+                triggerRender()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isAiRunning = false,
+                    statusMessage = "AI Enhance error: ${e.localizedMessage}"
+                )
+            }
+        }
     }
 
-    fun applyPrompt(text: String) {
-        val (adj, matched) = StylePresets.matchPrompt(text)
-        pushUndo()
-        _adjustments.value = adj.scaledBy(_styleIntensity.value)
-        _promptMatchLabel.value = if (matched > 0) {
-            "Style ($matched cue${if (matched > 1) "s" else ""} matched)"
-        } else "Generic enhance"
+    fun saveToGallery() {
+        val state = _uiState.value
+        val src = state.sourceBitmap ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val finalBitmap = PhotoRenderer.render(
+                    source = src,
+                    adjustments = state.adjustments,
+                    loupeEnabled = false
+                )
+
+                val context = getApplication<Application>().applicationContext
+                val filename = "LoupeStudio_${System.currentTimeMillis()}.jpg"
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                    put(
+                        MediaStore.Images.Media.RELATIVE_PATH,
+                        Environment.DIRECTORY_PICTURES + "/LoupeStudio"
+                    )
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+
+                val resolver = context.contentResolver
+                val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                if (uri != null) {
+                    resolver.openOutputStream(uri)?.use { outStream ->
+                        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 96, outStream)
+                    }
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    resolver.update(uri, values, null, null)
+
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(
+                            statusMessage = "Saved HD photo to Pictures/LoupeStudio!"
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        statusMessage = "Save failed: ${e.localizedMessage}"
+                    )
+                }
+            }
+        }
     }
 
-    fun filteredStyles(): List<StylePreset> {
-        val cat = _activeCategory.value
-        return if (cat == "All") StylePresets.styles else StylePresets.styles.filter { it.category == cat }
+    private fun triggerRender() {
+        renderJob?.cancel()
+        renderJob = viewModelScope.launch(Dispatchers.Default) {
+            val state = _uiState.value
+            val src = state.sourceBitmap ?: return@launch
+            val rendered = PhotoRenderer.render(
+                source = src,
+                adjustments = state.adjustments,
+                loupeEnabled = state.loupeEnabled,
+                loupeCenterX = state.loupeX,
+                loupeCenterY = state.loupeY
+            )
+            _uiState.value = _uiState.value.copy(previewBitmap = rendered)
+        }
+    }
+
+    /**
+     * Generates a rich, detailed test artwork on startup so the user can test
+     * the AGSL shaders, Loupe magnifier, and AI 2x upscaler right away.
+     */
+    private fun createSampleStudioBitmap(width: Int, height: Int): Bitmap {
+        val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+        // Sunset sky gradient
+        paint.shader = LinearGradient(
+            0f, 0f, 0f, height.toFloat(),
+            intArrayOf(
+                Color.rgb(18, 24, 58),
+                Color.rgb(88, 42, 94),
+                Color.rgb(215, 92, 72),
+                Color.rgb(248, 178, 92)
+            ),
+            floatArrayOf(0f, 0.42f, 0.75f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+
+        // Glowing sun with fine concentric rings (great for testing Loupe & AI sharpening)
+        val sunX = width * 0.5f
+        val sunY = height * 0.48f
+        paint.shader = RadialGradient(
+            sunX, sunY, width * 0.28f,
+            intArrayOf(Color.rgb(255, 248, 210), Color.rgb(255, 140, 66), Color.TRANSPARENT),
+            floatArrayOf(0f, 0.55f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawCircle(sunX, sunY, width * 0.28f, paint)
+
+        // Fine geometric grid & detail lines for testing Loupe magnification
+        paint.shader = null
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1.6f
+        paint.color = Color.argb(90, 255, 255, 255)
+        for (r in 20..180 step 16) {
+            canvas.drawCircle(sunX, sunY, r.toFloat(), paint)
+        }
+
+        // Foreground mountain silhouettes
+        paint.style = Paint.Style.FILL
+        paint.color = Color.rgb(28, 22, 46)
+        val path = android.graphics.Path().apply {
+            moveTo(0f, height.toFloat())
+            lineTo(0f, height * 0.68f)
+            lineTo(width * 0.28f, height * 0.54f)
+            lineTo(width * 0.55f, height * 0.66f)
+            lineTo(width * 0.82f, height * 0.50f)
+            lineTo(width.toFloat(), height * 0.62f)
+            lineTo(width.toFloat(), height.toFloat())
+            close()
+        }
+        canvas.drawPath(path, paint)
+
+        // Crisp test typography
+        paint.color = Color.WHITE
+        paint.textSize = 34f
+        paint.textAlign = Paint.Align.CENTER
+        canvas.drawText("LOUPE STUDIO • AGSL + AI", sunX, height * 0.86f, paint)
+        paint.textSize = 20f
+        paint.color = Color.rgb(210, 220, 240)
+        canvas.drawText("Drag with Loupe ON or tap AI Enhance 2x", sunX, height * 0.91f, paint)
+
+        return bmp
     }
 }
