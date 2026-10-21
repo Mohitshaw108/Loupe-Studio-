@@ -173,7 +173,7 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Status & Tool Strip (Loupe Toggle + AI Enhance 2x)
+        // Status & Tool Strip (Loupe Toggle + AI Upscale 4x)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -195,7 +195,7 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
                 enabled = !state.isAiRunning,
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED))
             ) {
-                Text("✨ AI Enhance 2x", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("✨ AI Upscale 4x", color = Color.White, fontWeight = FontWeight.SemiBold)
             }
         }
 
